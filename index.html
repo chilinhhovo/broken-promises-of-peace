@@ -97,6 +97,7 @@
 
         const CreativeWarTimeline = () => {
             const [conflicts, setConflicts] = React.useState([]);
+            const [conflictsByContinent, setConflictsByContinent] = React.useState({});
             const [loading, setLoading] = React.useState(true);
             const [error, setError] = React.useState(null);
             const [selectedConflict, setSelectedConflict] = React.useState(null);
@@ -115,6 +116,7 @@
                             }
                             
                             const fileContent = await response.text();
+                            console.log("CSV content loaded successfully");
                             
                             // Parse CSV
                             const parsedData = Papa.parse(fileContent, {
@@ -123,9 +125,17 @@
                                 skipEmptyLines: true
                             });
                             
+                            console.log("CSV parsed successfully, rows:", parsedData.data.length);
+                            
                             // Process the data
                             const processedData = parsedData.data
-                                .filter(row => row.start_date && row.peace_date && row.end_date && row.conflict_name)
+                                .filter(row => {
+                                    const hasRequiredFields = row.start_date && row.peace_date && row.end_date && row.conflict_name;
+                                    if (!hasRequiredFields) {
+                                        console.log("Skipping row due to missing required fields:", row);
+                                    }
+                                    return hasRequiredFields;
+                                })
                                 .map(row => {
                                     try {
                                         const startDate = new Date(row.start_date);
@@ -134,6 +144,7 @@
                                         const possibleResume = (row.possible_resume === true || row.possible_resume === 'True');
                                         
                                         if (isNaN(startDate) || isNaN(peaceDate) || isNaN(endDate)) {
+                                            console.log("Invalid dates in row:", row);
                                             return null;
                                         }
                                         
@@ -142,13 +153,28 @@
                                         const peaceToEndDays = Math.round((endDate - peaceDate) / (1000 * 60 * 60 * 24));
                                         
                                         if (totalDays <= 0 || warToPeaceDays < 0 || peaceToEndDays < 0) {
+                                            console.log("Invalid duration in row:", row);
                                             return null;
                                         }
+
+                                        // Map region codes to continent names
+                                        const regionToContinent = {
+                                            1: "Europe",
+                                            2: "Middle East",
+                                            3: "Asia",
+                                            4: "Africa",
+                                            5: "Americas",
+                                            6: "Oceania"
+                                        };
+                                        
+                                        const continent = regionToContinent[row.region] || 'Unknown';
+                                        console.log(`Mapped region ${row.region} to continent ${continent}`);
                                         
                                         return {
                                             id: row.paid || Math.random().toString(36).substr(2, 9),
                                             name: row.conflict_name,
                                             location: row.location || 'Unknown',
+                                            continent: continent,
                                             sides: `${row.side_a || 'Unknown'} vs ${row.side_b || 'Unknown'}`,
                                             intensity: row.intensity_level || Math.floor(Math.random() * 3) + 1,
                                             startDate: startDate,
@@ -164,25 +190,60 @@
                                             possibleResume
                                         };
                                     } catch (e) {
+                                        console.error("Error processing row:", e, row);
                                         return null;
                                     }
                                 })
                                 .filter(Boolean);
+
+                            console.log("Processed data length:", processedData.length);
                             
-                            const sampleSize = 50;
-                            const step = Math.max(1, Math.floor(processedData.length / sampleSize));
-                            
-                            const samples = [];
-                            for (let i = 0; i < processedData.length && samples.length < sampleSize; i += step) {
-                                samples.push(processedData[i]);
+                            if (processedData.length === 0) {
+                                throw new Error("No valid conflicts found in the data");
                             }
-                            
-                            setConflicts(samples);
-                            setSelectedConflict(samples[0]);
+
+                            // Remove duplicate wars globally (not per continent)
+                            const uniqueWars = processedData.filter((conflict, index, self) =>
+                                index === self.findIndex(c =>
+                                    c.name === conflict.name &&
+                                    c.startYear === conflict.startYear &&
+                                    c.location === conflict.location &&
+                                    c.sides === conflict.sides
+                                )
+                            );
+
+                            // Sort unique wars by duration (longest first)
+                            uniqueWars.sort((a, b) => b.totalDays - a.totalDays);
+
+                            // Take up to maxTotalConflicts wars
+                            const maxTotalConflicts = 300;
+                            const warsToShow = uniqueWars.slice(0, maxTotalConflicts);
+
+                            // Group the unique wars by continent
+                            let finalConflictsByContinent;
+                            try {
+                                finalConflictsByContinent = warsToShow.reduce((acc, conflict) => {
+                                    const continent = conflict.continent;
+                                    if (!acc[continent]) {
+                                        acc[continent] = [];
+                                    }
+                                    acc[continent].push(conflict);
+                                    return acc;
+                                }, {});
+                            } catch (error) {
+                                finalConflictsByContinent = {
+                                    "All Conflicts": warsToShow
+                                };
+                            }
+                            setConflicts(warsToShow);
+                            setConflictsByContinent(finalConflictsByContinent);
+                            setSelectedConflict(warsToShow[0]);
                             
                         } catch (csvError) {
-                            console.warn("Failed to load CSV, using sample data:", csvError);
+                            console.error("Failed to load CSV:", csvError);
                             setConflicts(SAMPLE_CONFLICTS);
+                            // Group sample data by a fake continent for fallback
+                            setConflictsByContinent({"Sample Conflicts": SAMPLE_CONFLICTS});
                             setSelectedConflict(SAMPLE_CONFLICTS[0]);
                         }
                         
@@ -193,9 +254,10 @@
                         }, 500);
                         
                     } catch (error) {
-                        console.error("Error:", error);
+                        console.error("Error in loadData:", error);
                         setError("Failed to load conflict data");
                         setConflicts(SAMPLE_CONFLICTS);
+                        setConflictsByContinent({"Sample Conflicts": SAMPLE_CONFLICTS});
                         setSelectedConflict(SAMPLE_CONFLICTS[0]);
                         setLoading(false);
                         
@@ -269,7 +331,7 @@
                             className={`absolute transition-all duration-1000 ease-out ${animateBlood ? 'opacity-100' : 'opacity-0'}`}
                             style={{
                                 left: `${peaceX}px`,
-                                top: '36px',
+                                top: '38px',
                                 transform: 'scale(1.1)',
                                 transformOrigin: 'center bottom',
                                 zIndex: 50,
@@ -282,7 +344,7 @@
                                     fill="#e67e22"
                                     className="animate-gentle-pulse"
                                 />
-                                <text x="16" y="24" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">
+                                <text x="16" y="28" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">
                                     <tspan x="16" dy="0">PEACE</tspan>
                                     <tspan x="16" dy="12">TREATY</tspan>
                                 </text>
@@ -299,7 +361,7 @@
                             className={`absolute transition-all duration-1000 ease-out ${animateBlood ? 'opacity-100' : 'opacity-0'}`}
                             style={{
                                 left: `${endX}px`,
-                                top: '44px',
+                                top: '38px',
                                 zIndex: 50,
                                 transitionDelay: '1500ms'
                             }}
@@ -310,7 +372,7 @@
                                     fill={conflict.possibleResume ? '#ef4444' : '#22c55e'}
                                     className="animate-gentle-pulse"
                                 />
-                                <text x="14" y="24" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">
+                                <text x="14" y="28" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">
                                     <tspan x="14" dy="0">ACTUAL</tspan>
                                     <tspan x="14" dy="12">PEACE</tspan>
                                 </text>
@@ -362,188 +424,189 @@
                 return <div className="p-4 bg-gray-900 text-white">No conflict data available</div>;
             }
 
-            // Remove duplicate conflicts by name, startYear, location, and sides
-            const uniqueConflicts = conflicts.filter((conflict, index, self) =>
-                index === self.findIndex(c =>
-                    c.name === conflict.name &&
-                    c.startYear === conflict.startYear &&
-                    c.location === conflict.location &&
-                    c.sides === conflict.sides
-                )
-            );
-
             return (
-                <div className="min-h-screen bg-gray-900 text-white p-4">
+                <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
                     <h1 className="text-4xl font-bold text-center mb-2 text-gray-200 tracking-wider">BROKEN PROMISES OF PEACE</h1>
                     <h2 className="text-xl text-center mb-6 text-gray-400">When Peace Treaties Fail to End the Bloodshed</h2>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center mb-6">
-                        {uniqueConflicts.map(conflict => (
-                            <button
-                                key={conflict.id}
-                                onClick={() => {
-                                    setSelectedConflict(conflict);
-                                    setAnimateBlood(false);
-                                    setTimeout(() => setAnimateBlood(true), 100);
-                                }}
-                                className={`px-3 py-1 rounded-full transition-all duration-300 text-sm
-                                        ${selectedConflict.id === conflict.id 
-                                            ? 'bg-gray-700 text-white shadow-lg scale-110' 
-                                            : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                            >
-                                {conflict.name}
-                            </button>
-                        ))}
-                    </div>
-                    
-                    <div className="bg-black rounded-lg shadow-2xl overflow-hidden mb-8 max-w-4xl mx-auto">
-                        <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-4">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className="text-2xl font-bold">{selectedConflict.name}</h3>
-                                    <p className="text-gray-300">{selectedConflict.location}</p>
-                                    <p className="text-gray-400 text-sm mt-1">{selectedConflict.sides}</p>
-                                </div>
-                                <div className="text-right">
-                                    <div className="grid grid-cols-6 gap-1 w-72 mx-auto mb-1">
-                                        {[0,1,2,3,4,5].map(i => (
-                                            <div key={i} className="flex flex-col items-center">
-                                                <svg width="16" height="16" viewBox="0 0 16 16">
-                                                    <circle 
-                                                        cx="8" 
-                                                        cy="8" 
-                                                        r="6" 
-                                                        fill={
-                                                            i === 0 ? '#bae6fd' :
-                                                            i === 1 ? '#7dd3fc' :
-                                                            i === 2 ? '#38bdf8' :
-                                                            i === 3 ? '#0ea5e9' :
-                                                            i === 4 ? '#0369a1' :
-                                                            '#95a5a6'
-                                                        }
-                                                        opacity={i < 5 ? (i < selectedConflict.intensity ? 1 : 0.3) : 1}
-                                                    />
-                                                </svg>
-                                                <span className="text-xs text-gray-400 mt-1 text-center">
-                                                    {i === 3 ? (<><span>Very</span><br/><span>High</span></>) :
-                                                     i === 4 ? (<><span>Extreme</span></>) :
-                                                     i === 5 ? (<><span>No</span><br/><span>Fighting</span></>) :
-                                                     ["Low","Moderate","High"][i]}
-                                                </span>
-                                            </div>
+                    <div className="flex flex-col md:flex-row gap-6 w-full max-w-screen-lg mx-auto mr-12">
+                        {/* Sidebar: Continent/Conflict List */}
+                        <div className="md:w-1/4 w-full max-h-[80vh] overflow-y-auto bg-gray-800 bg-opacity-60 rounded-lg p-4 border border-gray-700">
+                            {Object.entries(conflictsByContinent || {}).map(([continent, continentConflicts]) => (
+                                <div key={continent} className="mb-6">
+                                    <h3 className="text-xl font-bold mb-3 text-gray-300 border-b border-gray-700 pb-2">{continent}</h3>
+                                    <div className="flex flex-wrap gap-2 break-words">
+                                        {(continentConflicts || []).map(conflict => (
+                                            <button
+                                                key={conflict.id}
+                                                onClick={() => {
+                                                    setSelectedConflict(conflict);
+                                                    setAnimateBlood(false);
+                                                    setTimeout(() => setAnimateBlood(true), 100);
+                                                }}
+                                                className={`px-2 py-0.5 rounded-full transition-all duration-300 text-xs whitespace-nowrap
+                                                        ${selectedConflict?.id === conflict.id 
+                                                            ? 'bg-gray-600 text-white shadow scale-105' 
+                                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                            >
+                                                {conflict.name}
+                                            </button>
                                         ))}
                                     </div>
-                                    <p className="text-xl font-bold mt-2">
-                                        {Math.round(selectedConflict.totalDays / 365)} <span className="text-sm">years</span>
-                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Main Content: Timeline and Details */}
+                        <div className="md:w-2/3 w-full">
+                            <div className="bg-black rounded-lg shadow-2xl overflow-hidden mb-8 max-w-4xl mx-auto">
+                                <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-4">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="text-2xl font-bold">{selectedConflict.name}</h3>
+                                            <p className="text-gray-300">{selectedConflict.location}</p>
+                                            <p className="text-gray-400 text-sm mt-1">{selectedConflict.sides}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="grid grid-cols-6 gap-1 w-72 mx-auto mb-1">
+                                                {[0,1,2,3,4,5].map(i => (
+                                                    <div key={i} className="flex flex-col items-center">
+                                                        <svg width="16" height="16" viewBox="0 0 16 16">
+                                                            <circle 
+                                                                cx="8" 
+                                                                cy="8" 
+                                                                r="6" 
+                                                                fill={
+                                                                    i === 0 ? '#bae6fd' :
+                                                                    i === 1 ? '#7dd3fc' :
+                                                                    i === 2 ? '#38bdf8' :
+                                                                    i === 3 ? '#0ea5e9' :
+                                                                    i === 4 ? '#0369a1' :
+                                                                    '#95a5a6'
+                                                                }
+                                                                opacity={i < 5 ? (i < selectedConflict.intensity ? 1 : 0.3) : 1}
+                                                            />
+                                                        </svg>
+                                                        <span className="text-xs text-gray-400 mt-1 text-center">
+                                                            {i === 3 ? (<><span>Very</span><br/><span>High</span></>) :
+                                                             i === 4 ? (<><span>Extreme</span></>) :
+                                                             i === 5 ? (<><span>No</span><br/><span>Fighting</span></>) :
+                                                             ["Low","Moderate","High"][i]}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-xl font-bold mt-2">
+                                                {Math.round(selectedConflict.totalDays / 365)} <span className="text-sm">years</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="relative h-36 p-4 bg-gradient-to-b from-gray-800 to-gray-900 overflow-hidden">
+                                    <div className="absolute left-5 right-5 h-1 bg-gray-700 top-[80px]"></div>
+                                    
+                                    <div className="absolute left-5 top-[90px] text-xs text-gray-500">{selectedConflict.startYear}</div>
+                                    <div 
+                                        className="absolute top-[90px] text-xs text-orange-500"
+                                        style={{ 
+                                            left: `${20 + (selectedConflict.warToPeaceDays / 365 * 20)}px`, 
+                                            transform: 'translateX(-50%)' 
+                                        }}
+                                    >
+                                        {selectedConflict.peaceYear}
+                                    </div>
+                                    <div 
+                                        className="absolute top-[90px] text-xs"
+                                        style={{ 
+                                            left: `${20 + (selectedConflict.warToPeaceDays / 365 * 20) + 40 + 
+                                                (Math.min(10, Math.ceil(selectedConflict.peaceToEndDays / 365)) * 15)}px`,
+                                            transform: 'translateX(-50%)',
+                                            color: selectedConflict.possibleResume ? '#ef4444' : '#22c55e'
+                                        }}
+                                    >
+                                        {selectedConflict.endYear}
+                                    </div>
+                                    
+                                    {renderConflictMarkers(selectedConflict, 'war')}
+                                    {renderConflictMarkers(selectedConflict, 'peace')}
+                                    {renderConflictMarkers(selectedConflict, 'end')}
+                                </div>
+                                <div className="bg-gradient-to-r from-gray-800 to-gray-900 w-full px-6 py-3 rounded-md border border-gray-800 mb-6 flex flex-col md:flex-row items-center gap-4">
+                                    <div className="flex items-center mb-2 md:mb-0">
+                                        <svg width="20" height="20" className="inline-block mr-1 align-middle"><circle cx="10" cy="10" r="9" fill="#ef4444" /></svg>
+                                        <span className="text-sm font-semibold text-gray-200 mr-4">Red END: Fighting continued after the peace treaty (conflict not truly over)</span>
+                                        <svg width="20" height="20" className="inline-block mr-1 align-middle"><circle cx="10" cy="10" r="9" fill="#22c55e" /></svg>
+                                        <span className="text-sm font-semibold text-gray-200">Green END: No fighting after the peace treaty (frozen conflict or suspended resolution)</span>
+                                    </div>
+                                    <div className="text-sm text-gray-400 mt-2 md:mt-0 md:ml-4">
+                                        Circle size reflects the intensity or bloodiness of the conflict period.
+                                    </div>
+                                </div>
+                                <div className="bg-gradient-to-r from-gray-800 to-black p-4">
+                                    <div className="grid grid-cols-3 gap-4 text-center">
+                                        <div className="bg-gray-900 rounded p-3">
+                                            <h4 className="text-gray-400 text-sm">WAR DURATION</h4>
+                                            <p className="text-xl font-bold">{Math.round(selectedConflict.warToPeaceDays / 365)} years</p>
+                                            <p className="text-xs text-gray-500">{selectedConflict.warToPeaceDays.toLocaleString()} days</p>
+                                        </div>
+                                        <div className="bg-gray-900 rounded p-3">
+                                            <h4 className="text-orange-500 text-sm">PEACE TO END</h4>
+                                            <p className="text-xl font-bold">{Math.round(selectedConflict.peaceToEndDays / 365)} years</p>
+                                            <p className="text-xs text-gray-500">{selectedConflict.peaceToEndDays.toLocaleString()} days</p>
+                                        </div>
+                                        <div className="bg-gray-900 rounded p-3">
+                                            <h4 className="text-green-500 text-sm">TOTAL CONFLICT</h4>
+                                            <p className="text-xl font-bold">{Math.round(selectedConflict.totalDays / 365)} years</p>
+                                            <p className="text-xs text-gray-500">{selectedConflict.totalDays.toLocaleString()} days</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-4 bg-black bg-opacity-50 p-3 rounded border border-gray-700">
+                                        <h4 className="text-gray-400 text-sm font-bold mb-1">THE REALITY OF PEACE</h4>
+                                        <p className="text-sm">
+                                            {selectedConflict.peaceToEndDays > selectedConflict.warToPeaceDays
+                                                ? "This conflict continued longer after peace than during active war, showing how peace treaties often fail to bring true resolution."
+                                                : selectedConflict.peaceToEndDays > 365
+                                                ? "Despite a peace treaty, violence continued for years, demonstrating the fragility of peace agreements."
+                                                : "Even this relatively short post-peace period shows how peace treaties rarely end conflict immediately."}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div className="relative h-36 p-4 bg-gradient-to-b from-gray-800 to-gray-900 overflow-hidden">
-                            <div className="absolute left-5 right-5 h-1 bg-gray-700 top-[80px]"></div>
                             
-                            <div className="absolute left-5 top-[90px] text-xs text-gray-500">{selectedConflict.startYear}</div>
-                            <div 
-                                className="absolute top-[90px] text-xs text-orange-500"
-                                style={{ 
-                                    left: `${20 + (selectedConflict.warToPeaceDays / 365 * 20)}px`, 
-                                    transform: 'translateX(-50%)' 
-                                }}
-                            >
-                                {selectedConflict.peaceYear}
-                            </div>
-                            <div 
-                                className="absolute top-[90px] text-xs"
-                                style={{ 
-                                    left: `${20 + (selectedConflict.warToPeaceDays / 365 * 20) + 40 + 
-                                        (Math.min(10, Math.ceil(selectedConflict.peaceToEndDays / 365)) * 15)}px`,
-                                    transform: 'translateX(-50%)',
-                                    color: selectedConflict.possibleResume ? '#ef4444' : '#22c55e'
-                                }}
-                            >
-                                {selectedConflict.endYear}
-                            </div>
-                            
-                            {renderConflictMarkers(selectedConflict, 'war')}
-                            {renderConflictMarkers(selectedConflict, 'peace')}
-                            {renderConflictMarkers(selectedConflict, 'end')}
-                        </div>
-                        <div className="bg-gradient-to-r from-gray-800 to-gray-900 w-full px-6 py-3 rounded-md border border-gray-800 mb-6 flex flex-col md:flex-row items-center gap-4">
-                            <div className="flex items-center mb-2 md:mb-0">
-                                <svg width="20" height="20" className="inline-block mr-1 align-middle"><circle cx="10" cy="10" r="9" fill="#ef4444" /></svg>
-                                <span className="text-sm font-semibold text-gray-200 mr-4">Red END: Fighting continued after the peace treaty (conflict not truly over)</span>
-                                <svg width="20" height="20" className="inline-block mr-1 align-middle"><circle cx="10" cy="10" r="9" fill="#22c55e" /></svg>
-                                <span className="text-sm font-semibold text-gray-200">Green END: No fighting after the peace treaty (frozen conflict or suspended resolution)</span>
-                            </div>
-                            <div className="text-sm text-gray-400 mt-2 md:mt-0 md:ml-4">
-                                Circle size reflects the intensity or bloodiness of the conflict period.
-                            </div>
-                        </div>
-                        <div className="bg-gradient-to-r from-gray-800 to-black p-4">
-                            <div className="grid grid-cols-3 gap-4 text-center">
-                                <div className="bg-gray-900 rounded p-3">
-                                    <h4 className="text-gray-400 text-sm">WAR DURATION</h4>
-                                    <p className="text-xl font-bold">{Math.round(selectedConflict.warToPeaceDays / 365)} years</p>
-                                    <p className="text-xs text-gray-500">{selectedConflict.warToPeaceDays.toLocaleString()} days</p>
-                                </div>
-                                <div className="bg-gray-900 rounded p-3">
-                                    <h4 className="text-orange-500 text-sm">PEACE TO END</h4>
-                                    <p className="text-xl font-bold">{Math.round(selectedConflict.peaceToEndDays / 365)} years</p>
-                                    <p className="text-xs text-gray-500">{selectedConflict.peaceToEndDays.toLocaleString()} days</p>
-                                </div>
-                                <div className="bg-gray-900 rounded p-3">
-                                    <h4 className="text-green-500 text-sm">TOTAL CONFLICT</h4>
-                                    <p className="text-xl font-bold">{Math.round(selectedConflict.totalDays / 365)} years</p>
-                                    <p className="text-xs text-gray-500">{selectedConflict.totalDays.toLocaleString()} days</p>
+                            <div className="bg-black bg-opacity-50 rounded-lg p-6 max-w-4xl mx-auto mb-6">
+                                <h3 className="text-xl font-bold mb-4 text-gray-400">THE TRUTH ABOUT PEACE TREATIES</h3>
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div className="bg-gray-900 p-4 rounded">
+                                        <h4 className="font-bold mb-2 text-gray-300">The Myth of Peace</h4>
+                                        <p className="text-sm">
+                                            Peace treaties are often seen as the end of war. In reality, the violence usually continues under new forms.
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-900 p-4 rounded">
+                                        <h4 className="font-bold mb-2 text-gray-300">The Long Shadow of War</h4>
+                                        <p className="text-sm">
+                                            After peace is declared, conflict can persist through unrest, insurgencies, or political instability.
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-900 p-4 rounded">
+                                        <h4 className="font-bold mb-2 text-gray-300">Failed Transitions</h4>
+                                        <p className="text-sm">
+                                            The shift from war to peace is rarely clean. Power struggles and unresolved tensions often resurface.
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-900 p-4 rounded">
+                                        <h4 className="font-bold mb-2 text-gray-300">The Cost of False Peace</h4>
+                                        <p className="text-sm">
+                                            When treaties do not bring real resolution, they prolong suffering. The appearance of peace can block real solutions.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div className="mt-4 bg-black bg-opacity-50 p-3 rounded border border-gray-700">
-                                <h4 className="text-gray-400 text-sm font-bold mb-1">THE REALITY OF PEACE</h4>
-                                <p className="text-sm">
-                                    {selectedConflict.peaceToEndDays > selectedConflict.warToPeaceDays
-                                        ? "This conflict continued longer after peace than during active war, showing how peace treaties often fail to bring true resolution."
-                                        : selectedConflict.peaceToEndDays > 365
-                                        ? "Despite a peace treaty, violence continued for years, demonstrating the fragility of peace agreements."
-                                        : "Even this relatively short post-peace period shows how peace treaties rarely end conflict immediately."}
-                                </p>
+                            <div className="text-center text-sm text-gray-600 mt-8">
+                                Data source: Uppsala Conflict Data Program &nbsp;|&nbsp; Visualization by Chi Vo &nbsp;|&nbsp; <a href="https://github.com/chilinhhovo/project_6">Github</a>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div className="bg-black bg-opacity-50 rounded-lg p-6 max-w-4xl mx-auto mb-6">
-                        <h3 className="text-xl font-bold mb-4 text-gray-400">THE TRUTH ABOUT PEACE TREATIES</h3>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div className="bg-gray-900 p-4 rounded">
-                                <h4 className="font-bold mb-2 text-gray-300">The Myth of Peace</h4>
-                                <p className="text-sm">
-                                    Peace treaties are often seen as the end of war. In reality, the violence usually continues under new forms.
-                                </p>
-                            </div>
-                            <div className="bg-gray-900 p-4 rounded">
-                                <h4 className="font-bold mb-2 text-gray-300">The Long Shadow of War</h4>
-                                <p className="text-sm">
-                                    After peace is declared, conflict can persist through unrest, insurgencies, or political instability.
-                                </p>
-                            </div>
-                            <div className="bg-gray-900 p-4 rounded">
-                                <h4 className="font-bold mb-2 text-gray-300">Failed Transitions</h4>
-                                <p className="text-sm">
-                                    The shift from war to peace is rarely clean. Power struggles and unresolved tensions often resurface.
-                                </p>
-                            </div>
-                            <div className="bg-gray-900 p-4 rounded">
-                                <h4 className="font-bold mb-2 text-gray-300">The Cost of False Peace</h4>
-                                <p className="text-sm">
-                                    When treaties do not bring real resolution, they prolong suffering. The appearance of peace can block real solutions.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="text-center text-sm text-gray-600 mt-8">
-                        Data source: Uppsala Conflict Data Program &nbsp;|&nbsp; Visualization by Chi Vo &nbsp;|&nbsp; <a href="https://github.com/chilinhhovo/project_6">Github</a>
                     </div>
                 </div>
             );
