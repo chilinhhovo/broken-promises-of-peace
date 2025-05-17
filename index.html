@@ -38,15 +38,21 @@
         }
         
         body {
-            background-color: #1a1a1a;
+            background-color: #1b2230;
             color: #e0e0e0;
             margin: 0;
             font-family: system-ui, -apple-system, sans-serif;
         }
+        
+        #root-flex {
+            background-color: #1b2230;
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root-flex" class="flex flex-col justify-center items-center min-h-screen w-full">
+      <div id="root"></div>
+    </div>
     
     <script type="text/babel">
         // Sample conflict data (in case CSV loading fails)
@@ -425,7 +431,7 @@
             }
 
             return (
-                <div className="min-h-screen text-white p-4 flex flex-col items-center ml-12" style={{ backgroundColor: '#1b2230' }}>
+                <div className="min-h-screen text-white p-4 flex flex-col items-center">
                     <h1 className="text-4xl font-bold text-center mb-2 text-gray-200 tracking-wider mt-12">BROKEN PROMISES OF PEACE</h1>
                     <h2 className="text-xl text-center mb-6 text-gray-400">When Peace Treaties Fail to End the Bloodshed</h2>
                     <div className="flex flex-col md:flex-row gap-6 w-full max-w-screen-lg mx-auto mr-12">
