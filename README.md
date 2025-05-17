@@ -1,5 +1,6 @@
 # Methodology: Matching Peace Treaties to Conflict Outcomes
 [[Website](https://chilinhhovo.github.io/project_6/)]
+
 To examine how often peace agreements actually lead to the end of war, I analyzed two datasets from the Uppsala Conflict Data Program (UCDP):
 
 Peace Agreements Dataset (v22.1): Records of signed treaties, including dates, conflict names, and involved parties here [[here](https://uu.diva-portal.org/smash/record.jsf?pid=diva2%3A1343886&dswid=519 )] 
