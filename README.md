@@ -2,8 +2,10 @@
 To examine how often peace agreements actually lead to the end of war, I analyzed two datasets from the Uppsala Conflict Data Program (UCDP):
 
 Peace Agreements Dataset (v22.1): Records of signed treaties, including dates, conflict names, and involved parties here [[here](https://uu.diva-portal.org/smash/record.jsf?pid=diva2%3A1343886&dswid=519 )] 
+• Pettersson, Therese, Stina Högbladh & Magnus Öberg (2019). Organized violence, 1989-2018 and peace agreements. Journal of Peace Research 56(4): 589-603.
 
-Conflict Termination Dataset (v3-2021): Timelines for when each conflict began and ended, and the nature of the resolution.
+Conflict Termination Dataset (v3-2021): Timelines for when each conflict began and ended, and the nature of the resolution. 
+• Kreutz, Joakim (2010) How and When Armed Conflicts End: Introducing the UCDP Conflict Termination Dataset. Journal of Peace Research 47(2).
 
 1. Data Cleaning & Parsing
 We loaded the raw .xlsx files and:
