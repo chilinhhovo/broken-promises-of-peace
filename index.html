@@ -425,8 +425,8 @@
             }
 
             return (
-                <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center">
-                    <h1 className="text-4xl font-bold text-center mb-2 text-gray-200 tracking-wider">BROKEN PROMISES OF PEACE</h1>
+                <div className="min-h-screen text-white p-4 flex flex-col items-center ml-12" style={{ backgroundColor: '#1b2230' }}>
+                    <h1 className="text-4xl font-bold text-center mb-2 text-gray-200 tracking-wider mt-12">BROKEN PROMISES OF PEACE</h1>
                     <h2 className="text-xl text-center mb-6 text-gray-400">When Peace Treaties Fail to End the Bloodshed</h2>
                     <div className="flex flex-col md:flex-row gap-6 w-full max-w-screen-lg mx-auto mr-12">
                         {/* Sidebar: Continent/Conflict List */}
@@ -531,11 +531,17 @@
                                     {renderConflictMarkers(selectedConflict, 'end')}
                                 </div>
                                 <div className="bg-gradient-to-r from-gray-800 to-gray-900 w-full px-6 py-3 rounded-md border border-gray-800 mb-6 flex flex-col md:flex-row items-center gap-4">
-                                    <div className="flex items-center mb-2 md:mb-0">
-                                        <svg width="20" height="20" className="inline-block mr-1 align-middle"><circle cx="10" cy="10" r="9" fill="#ef4444" /></svg>
-                                        <span className="text-sm font-semibold text-gray-200 mr-4">Red END: Fighting continued after the peace treaty (conflict not truly over)</span>
-                                        <svg width="20" height="20" className="inline-block mr-1 align-middle"><circle cx="10" cy="10" r="9" fill="#22c55e" /></svg>
-                                        <span className="text-sm font-semibold text-gray-200">Green END: No fighting after the peace treaty (frozen conflict or suspended resolution)</span>
+                                    <div className="flex flex-col md:flex-row items-center mb-2 md:mb-0 gap-4">
+                                        <div className="flex items-center">
+                                            <svg width="20" height="20" className="mr-2 flex-shrink-0"><circle cx="10" cy="10" r="9" fill="#ef4444" /></svg>
+                                            <span className="text-sm font-semibold text-gray-200">Red END: Fighting continued after the peace treaty (conflict not truly over)</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col md:flex-row items-center mb-2 md:mb-0 gap-4">
+                                        <div className="flex items-center">
+                                            <svg width="20" height="20" className="mr-2 flex-shrink-0"><circle cx="10" cy="10" r="9" fill="#22c55e" /></svg>
+                                            <span className="text-sm font-semibold text-gray-200">Green END: No fighting after the peace treaty (frozen conflict or suspended resolution)</span>
+                                        </div>
                                     </div>
                                     <div className="text-sm text-gray-400 mt-2 md:mt-0 md:ml-4">
                                         Circle size reflects the intensity or bloodiness of the conflict period.
@@ -603,7 +609,7 @@
                                 </div>
                             </div>
                             
-                            <div className="text-center text-sm text-gray-600 mt-8">
+                            <div className="w-full text-center text-sm text-gray-600 mt-8 mx-auto">
                                 Data source: Uppsala Conflict Data Program &nbsp;|&nbsp; Visualization by Chi Vo &nbsp;|&nbsp; <a href="https://github.com/chilinhhovo/project_6">Github</a>
                             </div>
                         </div>
