@@ -1,4 +1,4 @@
-# Methodology: Matching Peace Treaties to Conflict Outcomes
+# Broken Promises of Peace
 [[Website](https://chilinhhovo.github.io/project_6/)]
 
 To examine how often peace agreements actually lead to the end of war, I analyzed two datasets from the Uppsala Conflict Data Program (UCDP):
