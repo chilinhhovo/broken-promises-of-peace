@@ -108,6 +108,7 @@
             const [error, setError] = React.useState(null);
             const [selectedConflict, setSelectedConflict] = React.useState(null);
             const [animateBlood, setAnimateBlood] = React.useState(false);
+            const [searchQuery, setSearchQuery] = React.useState("");
             
             React.useEffect(() => {
                 const loadData = async () => {
@@ -137,10 +138,15 @@
                             const processedData = parsedData.data
                                 .filter(row => {
                                     const hasRequiredFields = row.start_date && row.peace_date && row.end_date && row.conflict_name;
-                                    if (!hasRequiredFields) {
-                                        console.log("Skipping row due to missing required fields:", row);
-                                    }
-                                    return hasRequiredFields;
+                                    if (!hasRequiredFields) return false;
+                                    // Check that peace_date is valid, not 1975-01-01, and falls within the conflict episode
+                                    const startDate = new Date(row.start_date);
+                                    const peaceDate = new Date(row.peace_date);
+                                    const endDate = new Date(row.end_date);
+                                    if (isNaN(startDate) || isNaN(peaceDate) || isNaN(endDate)) return false;
+                                    if (peaceDate.getTime() === new Date('1975-01-01').getTime()) return false;
+                                    if (!(peaceDate >= startDate && peaceDate <= endDate)) return false;
+                                    return true;
                                 })
                                 .map(row => {
                                     try {
@@ -289,6 +295,8 @@
                     ? ['#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9', '#0369a1']
                     : ['#7f8c8d', '#95a5a6', '#7f8c8d', '#95a5a6', '#7f8c8d'];
                 
+                const peaceX = 20 + (conflict.warToPeaceDays / 365 * 20);
+                
                 for (let i = 0; i < numMarkers; i++) {
                     const xPos = section === 'war' 
                         ? 20 + (i * 20) 
@@ -330,7 +338,6 @@
                 }
                 
                 if (section === 'peace') {
-                    const peaceX = 20 + (conflict.warToPeaceDays / 365 * 20);
                     markers.push(
                         <div 
                             key="peace-marker"
@@ -360,7 +367,11 @@
                 }
                 
                 if (section === 'end') {
-                    const endX = 20 + (conflict.warToPeaceDays / 365 * 20) + 40 + (Math.min(10, Math.ceil(conflict.peaceToEndDays / 365)) * 15);
+                    const minSpacing = 30; // px
+                    let endX = peaceX + 40 + (Math.min(10, Math.ceil(conflict.peaceToEndDays / 365)) * 15);
+                    if (endX - peaceX < minSpacing) {
+                        endX = peaceX + minSpacing;
+                    }
                     markers.push(
                         <div 
                             key="end-marker"
@@ -430,36 +441,68 @@
                 return <div className="p-4 bg-gray-900 text-white">No conflict data available</div>;
             }
 
+            if (selectedConflict.name === "India - Pakistan") {
+                console.log("India - Pakistan dates:", selectedConflict.startDate, selectedConflict.peaceDate, selectedConflict.endDate);
+            }
+
             return (
                 <div className="min-h-screen text-white p-4 flex flex-col items-center">
                     <h1 className="text-4xl font-bold text-center mb-2 text-gray-200 tracking-wider mt-12">BROKEN PROMISES OF PEACE</h1>
                     <h2 className="text-xl text-center mb-6 text-gray-400">When Peace Treaties Fail to End the Bloodshed</h2>
                     <div className="flex flex-col md:flex-row gap-6 w-full max-w-screen-lg mx-auto mr-12">
                         {/* Sidebar: Continent/Conflict List */}
-                        <div className="md:w-1/4 w-full max-h-[80vh] overflow-y-auto bg-gray-800 bg-opacity-60 rounded-lg p-4 border border-gray-700">
-                            {Object.entries(conflictsByContinent || {}).map(([continent, continentConflicts]) => (
-                                <div key={continent} className="mb-6">
-                                    <h3 className="text-xl font-bold mb-3 text-gray-300 border-b border-gray-700 pb-2">{continent}</h3>
-                                    <div className="flex flex-wrap gap-2 break-words">
-                                        {(continentConflicts || []).map(conflict => (
-                                            <button
-                                                key={conflict.id}
-                                                onClick={() => {
-                                                    setSelectedConflict(conflict);
-                                                    setAnimateBlood(false);
-                                                    setTimeout(() => setAnimateBlood(true), 100);
-                                                }}
-                                                className={`px-2 py-0.5 rounded-full transition-all duration-300 text-xs whitespace-nowrap
-                                                        ${selectedConflict?.id === conflict.id 
-                                                            ? 'bg-gray-600 text-white shadow scale-105' 
-                                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                                            >
-                                                {conflict.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                        <div className="md:w-1/4 w-full max-h-[80vh] overflow-y-auto overflow-x-hidden bg-gray-800 bg-opacity-60 rounded-lg p-4 border border-gray-700 relative">
+                            <div className="sticky top-0 z-10 bg-gray-800 bg-opacity-80 pb-2">
+                                <input
+                                    type="text"
+                                    placeholder="Search conflicts..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full px-3 py-2 rounded bg-gray-900 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                />
+                            </div>
+                            {Object.entries(conflictsByContinent || {})
+                                .sort(([a], [b]) => a.localeCompare(b))
+                                .map(([continent, continentConflicts]) => {
+                                    // Normalize and filter for unique conflicts
+                                    const seen = new Set();
+                                    let uniqueConflicts = (continentConflicts || []).filter(conflict => {
+                                        const key = `${(conflict.name || '').trim().toLowerCase()}|${conflict.startYear}|${(conflict.location || '').trim().toLowerCase()}|${(conflict.sides || '').trim().toLowerCase()}`;
+                                        if (seen.has(key)) return false;
+                                        seen.add(key);
+                                        return true;
+                                    });
+                                    // Sort conflicts alphabetically by name
+                                    uniqueConflicts = uniqueConflicts.sort((a, b) => a.name.localeCompare(b.name));
+                                    // Filter by search query
+                                    const filteredConflicts = uniqueConflicts.filter(conflict =>
+                                        conflict.name.toLowerCase().includes(searchQuery.toLowerCase())
+                                    );
+                                    if (filteredConflicts.length === 0) return null;
+                                    return (
+                                        <div key={continent} className="mb-6">
+                                            <h3 className="text-xl font-bold mb-3 text-gray-300 border-b border-gray-700 pb-2">{continent}</h3>
+                                            <div className="flex flex-wrap gap-2 break-words">
+                                                {filteredConflicts.map(conflict => (
+                                                    <button
+                                                        key={conflict.id}
+                                                        onClick={() => {
+                                                            setSelectedConflict(conflict);
+                                                            setAnimateBlood(false);
+                                                            setTimeout(() => setAnimateBlood(true), 100);
+                                                        }}
+                                                        className={`px-2 py-0.5 rounded-full transition-all duration-300 text-xs whitespace-nowrap
+                                                            ${selectedConflict?.id === conflict.id 
+                                                                ? 'bg-gray-600 text-white shadow scale-105' 
+                                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                    >
+                                                        {conflict.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                         </div>
                         {/* Main Content: Timeline and Details */}
                         <div className="md:w-2/3 w-full">
@@ -472,33 +515,36 @@
                                             <p className="text-gray-400 text-sm mt-1">{selectedConflict.sides}</p>
                                         </div>
                                         <div className="text-right">
-                                            <div className="grid grid-cols-6 gap-1 w-72 mx-auto mb-1">
-                                                {[0,1,2,3,4,5].map(i => (
-                                                    <div key={i} className="flex flex-col items-center">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16">
-                                                            <circle 
-                                                                cx="8" 
-                                                                cy="8" 
-                                                                r="6" 
-                                                                fill={
-                                                                    i === 0 ? '#bae6fd' :
-                                                                    i === 1 ? '#7dd3fc' :
-                                                                    i === 2 ? '#38bdf8' :
-                                                                    i === 3 ? '#0ea5e9' :
-                                                                    i === 4 ? '#0369a1' :
-                                                                    '#95a5a6'
-                                                                }
-                                                                opacity={i < 5 ? (i < selectedConflict.intensity ? 1 : 0.3) : 1}
-                                                            />
-                                                        </svg>
-                                                        <span className="text-xs text-gray-400 mt-1 text-center">
-                                                            {i === 3 ? (<><span>Very</span><br/><span>High</span></>) :
-                                                             i === 4 ? (<><span>Extreme</span></>) :
-                                                             i === 5 ? (<><span>No</span><br/><span>Fighting</span></>) :
-                                                             ["Low","Moderate","High"][i]}
-                                                        </span>
-                                                    </div>
-                                                ))}
+                                            <div className="flex flex-col items-center mb-4">
+                                                <span className="text-xs text-gray-400 mb-2">Intensity or "bloodiness" of the conflict periods</span>
+                                                <div className="grid grid-cols-6 gap-1 w-72 mx-auto mb-1">
+                                                    {[0,1,2,3,4,5].map(i => (
+                                                        <div key={i} className="flex flex-col items-center">
+                                                            <svg width="16" height="16" viewBox="0 0 16 16">
+                                                                <circle 
+                                                                    cx="8" 
+                                                                    cy="8" 
+                                                                    r="6" 
+                                                                    fill={
+                                                                        i === 0 ? '#bae6fd' :
+                                                                        i === 1 ? '#7dd3fc' :
+                                                                        i === 2 ? '#38bdf8' :
+                                                                        i === 3 ? '#0ea5e9' :
+                                                                        i === 4 ? '#0369a1' :
+                                                                        '#95a5a6'
+                                                                    }
+                                                                    opacity={i < 5 ? (i < selectedConflict.intensity ? 1 : 0.3) : 1}
+                                                                />
+                                                            </svg>
+                                                            <span className="text-xs text-gray-400 mt-1 text-center">
+                                                                {i === 3 ? (<><span>Very</span><br/><span>High</span></>) :
+                                                                 i === 4 ? (<><span>Extreme</span></>) :
+                                                                 i === 5 ? (<><span>No</span><br/><span>Fighting</span></>) :
+                                                                 ["Low","Moderate","High"][i]}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                             <p className="text-xl font-bold mt-2">
                                                 {Math.round(selectedConflict.totalDays / 365)} <span className="text-sm">years</span>
