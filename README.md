@@ -25,6 +25,30 @@ For each match, we computed:
 The number of days from the treaty to the official conflict end (duration_after_peace).
 Whether that span was longer than 2 years (730 days), a heuristic indicating potential conflict resumption or failure.
 
-# 4. Output
-I exported the matched results to matched_peace_conflict_episodes.csv, which powers the visualizations site. This includes war names, treaty dates, end dates, and whether peace was followed by prolonged or resumed conflict.
+# 4. Export
+Final dataset saved to matched_peace_conflict_episodes.csv, including:
+War name, sides, location, start/end/peace dates, conflict intensity.
+Whether conflict resumed or remained unresolved after peace.
+
+# 5. Visualization Logic
+Timeline Structure: Each conflict is visualized as a sequence:
+  Blue markers represent the war period before a peace treaty.
+  Orange icon marks the treaty signing.
+  End icon turns green if the war ended peacefully, or red if conflict continued.
+Duration Encoding:
+  Spacing and marker count proportional to time elapsed.
+  Circle size reflects "bloodiness" (conflict intensity).
+Interactivity:
+  Sidebar categorizes wars by continent.
+  Clicking on a war updates the main timeline and statistics
+
+# 6. Tools & Stack
+Frontend: Built in React with JSX compiled via Babel.
+Styling: Tailwind CSS for layout and typography.
+CSV Handling: PapaParse for in-browser data parsing.
+Hosting: Static GitHub Pages site with embedded script.
+
+
+The visual reveals how often wars do not truly end with a peace treaty. In many cases, more violence follows the treaty than preceded it. This suggests that "peace treaty" is often temporary, unstable, or symbolic. This tool helps spotlight those fragile post-conflict periods.
+
 
