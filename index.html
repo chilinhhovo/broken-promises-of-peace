@@ -295,7 +295,23 @@
                     ? ['#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9', '#0369a1']
                     : ['#7f8c8d', '#95a5a6', '#7f8c8d', '#95a5a6', '#7f8c8d'];
                 
-                const peaceX = 20 + (conflict.warToPeaceDays / 365 * 20);
+                const timelineWidth = 200; // width of the timeline
+                const startX = 20;
+                const rightEdge = timelineWidth - 20; // 20px padding
+                const totalDuration = conflict.totalDays;
+                const warToPeaceRatio = conflict.warToPeaceDays / totalDuration;
+                const peaceToEndRatio = conflict.peaceToEndDays / totalDuration;
+                const peaceX = startX + warToPeaceRatio * (timelineWidth - 40); // -40 for padding
+                let endX = peaceX + Math.max(peaceToEndRatio * (timelineWidth - 40), 30);
+                const minSpacing = 30; // px
+                if (endX - peaceX < minSpacing) {
+                    endX = peaceX + minSpacing;
+                }
+                if (endX > rightEdge) endX = rightEdge;
+                // If markers overlap, stack vertically
+                const overlap = endX - peaceX < minSpacing + 5;
+                const peaceY = overlap && section === 'peace' ? 28 : 38;
+                const endY = overlap && section === 'end' ? 48 : 38;
                 
                 for (let i = 0; i < numMarkers; i++) {
                     const xPos = section === 'war' 
@@ -344,8 +360,8 @@
                             className={`absolute transition-all duration-1000 ease-out ${animateBlood ? 'opacity-100' : 'opacity-0'}`}
                             style={{
                                 left: `${peaceX}px`,
-                                top: '38px',
-                                transform: 'scale(1.1)',
+                                top: `68px`,
+                                transform: 'translateY(-50%) scale(1.1)',
                                 transformOrigin: 'center bottom',
                                 zIndex: 50,
                                 transitionDelay: '500ms'
@@ -367,18 +383,14 @@
                 }
                 
                 if (section === 'end') {
-                    const minSpacing = 30; // px
-                    let endX = peaceX + 40 + (Math.min(10, Math.ceil(conflict.peaceToEndDays / 365)) * 15);
-                    if (endX - peaceX < minSpacing) {
-                        endX = peaceX + minSpacing;
-                    }
                     markers.push(
                         <div 
                             key="end-marker"
                             className={`absolute transition-all duration-1000 ease-out ${animateBlood ? 'opacity-100' : 'opacity-0'}`}
                             style={{
                                 left: `${endX}px`,
-                                top: '38px',
+                                top: `68px`,
+                                transform: 'translateY(-50%)',
                                 zIndex: 50,
                                 transitionDelay: '1500ms'
                             }}
@@ -472,33 +484,37 @@
                                         seen.add(key);
                                         return true;
                                     });
-                                    // Sort conflicts alphabetically by name
-                                    uniqueConflicts = uniqueConflicts.sort((a, b) => a.name.localeCompare(b.name));
-                                    // Filter by search query
+                                    // Sort conflicts alphabetically by sides
+                                    uniqueConflicts = uniqueConflicts.sort((a, b) => a.sides.localeCompare(b.sides));
+                                    // Filter by search query (now matches against sides)
                                     const filteredConflicts = uniqueConflicts.filter(conflict =>
-                                        conflict.name.toLowerCase().includes(searchQuery.toLowerCase())
+                                        conflict.sides.toLowerCase().includes(searchQuery.toLowerCase())
                                     );
                                     if (filteredConflicts.length === 0) return null;
                                     return (
                                         <div key={continent} className="mb-6">
                                             <h3 className="text-xl font-bold mb-3 text-gray-300 border-b border-gray-700 pb-2">{continent}</h3>
                                             <div className="flex flex-wrap gap-2 break-words">
-                                                {filteredConflicts.map(conflict => (
-                                                    <button
-                                                        key={conflict.id}
-                                                        onClick={() => {
-                                                            setSelectedConflict(conflict);
-                                                            setAnimateBlood(false);
-                                                            setTimeout(() => setAnimateBlood(true), 100);
-                                                        }}
-                                                        className={`px-2 py-0.5 rounded-full transition-all duration-300 text-xs whitespace-nowrap
-                                                            ${selectedConflict?.id === conflict.id 
-                                                                ? 'bg-gray-600 text-white shadow scale-105' 
-                                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                                                    >
-                                                        {conflict.name}
-                                                    </button>
-                                                ))}
+                                                {filteredConflicts.map(conflict => {
+                                                    const key = `${(conflict.name || '').trim().toLowerCase()}|${conflict.startYear}|${(conflict.location || '').trim().toLowerCase()}|${(conflict.sides || '').trim().toLowerCase()}`;
+                                                    const selectedKey = selectedConflict ? `${(selectedConflict.name || '').trim().toLowerCase()}|${selectedConflict.startYear}|${(selectedConflict.location || '').trim().toLowerCase()}|${(selectedConflict.sides || '').trim().toLowerCase()}` : '';
+                                                    return (
+                                                        <button
+                                                            key={key}
+                                                            onClick={() => {
+                                                                setSelectedConflict(conflict);
+                                                                setAnimateBlood(false);
+                                                                setTimeout(() => setAnimateBlood(true), 100);
+                                                            }}
+                                                            className={`px-2 py-0.5 rounded-full transition-all duration-300 text-xs whitespace-nowrap
+                                                                ${key === selectedKey 
+                                                                    ? 'bg-gray-600 text-white shadow scale-105' 
+                                                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                        >
+                                                            {conflict.sides}
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );
@@ -581,6 +597,12 @@
                                     {renderConflictMarkers(selectedConflict, 'war')}
                                     {renderConflictMarkers(selectedConflict, 'peace')}
                                     {renderConflictMarkers(selectedConflict, 'end')}
+                                    {/* Label for post-peace fighting */}
+                                    {selectedConflict.peaceToEndDays > 0 && selectedConflict.totalDays > (selectedConflict.warToPeaceDays + selectedConflict.peaceToEndDays) ? (
+                                        <div className="absolute left-1/2 w-full text-center" style={{top: '120px', transform: 'translateX(-50%)'}}>
+                                            <span className="text-xs font-bold text-red-400 bg-black bg-opacity-60 px-2 py-1 rounded">Fighting or instability continued even after the supposed end of conflict</span>
+                                        </div>
+                                    ) : null}
                                 </div>
                                 <div className="bg-gradient-to-r from-gray-800 to-gray-900 w-full px-6 py-3 rounded-md border border-gray-800 mb-6 flex flex-col md:flex-row items-center gap-4">
                                     <div className="flex flex-col md:flex-row items-center mb-2 md:mb-0 gap-4">
